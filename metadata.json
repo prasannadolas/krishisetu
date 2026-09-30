@@ -1,0 +1,10 @@
+{
+  "name": "KrishiSetu - Agricultural Intelligence Network",
+  "description": "An interoperable digital public good delivering real-time, localized AI agro-advisories, climate-resilient crop recommendations, soil & disease multimodal diagnostics, and inter-state cooperation for Indian agriculture.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

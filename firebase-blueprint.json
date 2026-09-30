@@ -1,0 +1,194 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Registered farmer profile with agricultural and regional details",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "The unique Firebase Auth user identifier",
+          "maxLength": 128
+        },
+        "name": {
+          "type": "string",
+          "description": "Farmer full name",
+          "maxLength": 100
+        },
+        "phone": {
+          "type": "string",
+          "description": "Contact phone number",
+          "maxLength": 20
+        },
+        "state": {
+          "type": "string",
+          "description": "Indian state of the farmer's agricultural land",
+          "maxLength": 50
+        },
+        "district": {
+          "type": "string",
+          "description": "District of the farm",
+          "maxLength": 50
+        },
+        "village": {
+          "type": "string",
+          "description": "Village or Taluka",
+          "maxLength": 100
+        },
+        "farmSizeAcres": {
+          "type": "string",
+          "description": "Farm landholding size in acres",
+          "maxLength": 20
+        },
+        "primaryCrops": {
+          "type": "string",
+          "description": "Key crops cultivated by the farmer",
+          "maxLength": 200
+        },
+        "soilType": {
+          "type": "string",
+          "description": "Predominant farm soil type",
+          "maxLength": 50
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp of profile creation",
+          "maxLength": 40
+        },
+        "updatedAt": {
+          "type": "string",
+          "description": "ISO timestamp of profile update",
+          "maxLength": 40
+        }
+      },
+      "required": ["uid", "name", "state", "district"]
+    },
+    "FarmerRecord": {
+      "title": "FarmerRecord",
+      "description": "Saved farmer activity including soil scans, disease diagnoses, and crop recommendations",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique record identifier",
+          "maxLength": 128
+        },
+        "userId": {
+          "type": "string",
+          "description": "Owner farmer Firebase Auth UID",
+          "maxLength": 128
+        },
+        "recordType": {
+          "type": "string",
+          "description": "Category of record",
+          "enum": ["soil_scan", "disease_diagnosis", "crop_advisory", "field_note"],
+          "maxLength": 30
+        },
+        "title": {
+          "type": "string",
+          "description": "Human-readable title of the record",
+          "maxLength": 150
+        },
+        "crop": {
+          "type": "string",
+          "description": "Associated crop if applicable",
+          "maxLength": 100
+        },
+        "summary": {
+          "type": "string",
+          "description": "Concise summary of findings or diagnosis",
+          "maxLength": 500
+        },
+        "detailsJson": {
+          "type": "string",
+          "description": "Serialized JSON string of detailed advisory/analysis data",
+          "maxLength": 10000
+        },
+        "imageUrl": {
+          "type": "string",
+          "description": "Captured image or thumbnail representation",
+          "maxLength": 500000
+        },
+        "createdAt": {
+          "type": "string",
+          "description": "ISO timestamp of record generation",
+          "maxLength": 40
+        }
+      },
+      "required": ["id", "userId", "recordType", "title", "createdAt"]
+    },
+    "CommunityReport": {
+      "title": "CommunityReport",
+      "description": "Farmer field report shared for regional disease and pest cooperation alerts",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique report identifier",
+          "maxLength": 128
+        },
+        "userId": {
+          "type": "string",
+          "description": "UID of the farmer reporting",
+          "maxLength": 128
+        },
+        "farmerName": {
+          "type": "string",
+          "description": "Name of the reporting farmer",
+          "maxLength": 100
+        },
+        "crop": {
+          "type": "string",
+          "description": "Affected crop name",
+          "maxLength": 100
+        },
+        "issue": {
+          "type": "string",
+          "description": "Observed symptom or pest issue",
+          "maxLength": 150
+        },
+        "description": {
+          "type": "string",
+          "description": "Detailed farmer field observation",
+          "maxLength": 1000
+        },
+        "state": {
+          "type": "string",
+          "description": "State where the issue was spotted",
+          "maxLength": 50
+        },
+        "district": {
+          "type": "string",
+          "description": "District where the issue was spotted",
+          "maxLength": 50
+        },
+        "severity": {
+          "type": "string",
+          "description": "Observed severity rating",
+          "enum": ["low", "moderate", "high", "critical"],
+          "maxLength": 20
+        },
+        "timestamp": {
+          "type": "string",
+          "description": "ISO timestamp of the report",
+          "maxLength": 40
+        }
+      },
+      "required": ["id", "userId", "crop", "issue", "state", "district", "severity"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Farmer user profile and account details"
+    },
+    "/users/{userId}/records/{recordId}": {
+      "schema": "FarmerRecord",
+      "description": "Individual farmer saved scans, diagnoses, and advisories"
+    },
+    "/communityReports/{reportId}": {
+      "schema": "CommunityReport",
+      "description": "Regional farmer pest and disease field alert signals"
+    }
+  }
+}

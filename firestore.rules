@@ -1,0 +1,109 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Hardened Global Helpers
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // Farmer Profile Validation
+    function isValidUser(data, uid) {
+      return data.keys().hasAll(['uid', 'name', 'state', 'district']) &&
+        data.uid == uid &&
+        data.uid == request.auth.uid &&
+        data.name is string && data.name.size() > 0 && data.name.size() <= 100 &&
+        data.state is string && data.state.size() > 0 && data.state.size() <= 50 &&
+        data.district is string && data.district.size() > 0 && data.district.size() <= 50 &&
+        (!('phone' in data) || (data.phone is string && data.phone.size() <= 20)) &&
+        (!('village' in data) || (data.village is string && data.village.size() <= 100)) &&
+        (!('farmSizeAcres' in data) || (data.farmSizeAcres is string && data.farmSizeAcres.size() <= 20)) &&
+        (!('primaryCrops' in data) || (data.primaryCrops is string && data.primaryCrops.size() <= 200)) &&
+        (!('soilType' in data) || (data.soilType is string && data.soilType.size() <= 50)) &&
+        (!('createdAt' in data) || (data.createdAt is string && data.createdAt.size() <= 40)) &&
+        (!('updatedAt' in data) || (data.updatedAt is string && data.updatedAt.size() <= 40));
+    }
+
+    // Farmer Record Validation
+    function isValidFarmerRecord(data, uid) {
+      return data.keys().hasAll(['id', 'userId', 'recordType', 'title', 'createdAt']) &&
+        data.userId == uid &&
+        data.userId == request.auth.uid &&
+        data.recordType in ['soil_scan', 'disease_diagnosis', 'crop_advisory', 'field_note'] &&
+        data.title is string && data.title.size() > 0 && data.title.size() <= 150 &&
+        data.createdAt is string && data.createdAt.size() <= 40 &&
+        (!('crop' in data) || (data.crop is string && data.crop.size() <= 100)) &&
+        (!('summary' in data) || (data.summary is string && data.summary.size() <= 500)) &&
+        (!('detailsJson' in data) || (data.detailsJson is string && data.detailsJson.size() <= 10000)) &&
+        (!('imageUrl' in data) || (data.imageUrl is string && data.imageUrl.size() <= 500000));
+    }
+
+    // Community Field Report Validation
+    function isValidCommunityReport(data) {
+      return data.keys().hasAll(['id', 'userId', 'crop', 'issue', 'state', 'district', 'severity']) &&
+        data.userId == request.auth.uid &&
+        data.crop is string && data.crop.size() > 0 && data.crop.size() <= 100 &&
+        data.issue is string && data.issue.size() > 0 && data.issue.size() <= 150 &&
+        data.state is string && data.state.size() > 0 && data.state.size() <= 50 &&
+        data.district is string && data.district.size() > 0 && data.district.size() <= 50 &&
+        data.severity in ['low', 'moderate', 'high', 'critical'] &&
+        (!('farmerName' in data) || (data.farmerName is string && data.farmerName.size() <= 100)) &&
+        (!('description' in data) || (data.description is string && data.description.size() <= 1000)) &&
+        (!('timestamp' in data) || (data.timestamp is string && data.timestamp.size() <= 40));
+    }
+
+    // 1. Farmer Profiles
+    match /users/{userId} {
+      allow get: if isOwner(userId) && isValidId(userId);
+      allow list: if false; // PII Protection: Blanket profile listing forbidden
+      allow create: if isOwner(userId) && isValidId(userId) && isValidUser(incoming(), userId);
+      allow update: if isOwner(userId) && isValidId(userId) && isValidUser(incoming(), userId) &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'name', 'phone', 'state', 'district', 'village', 'farmSizeAcres', 'primaryCrops', 'soilType', 'updatedAt'
+        ]);
+      allow delete: if isOwner(userId) && isValidId(userId);
+
+      // 2. Farmer Scans, Diagnoses, and Notes Subcollection
+      match /records/{recordId} {
+        allow get: if isOwner(userId) && isValidId(recordId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && isValidId(recordId) && isValidFarmerRecord(incoming(), userId);
+        allow update: if isOwner(userId) && isValidId(recordId) && isValidFarmerRecord(incoming(), userId) &&
+          incoming().diff(existing()).affectedKeys().hasOnly([
+            'title', 'crop', 'summary', 'detailsJson', 'imageUrl'
+          ]);
+        allow delete: if isOwner(userId) && isValidId(recordId);
+      }
+    }
+
+    // 3. Regional Community Disease & Pest Signals (Public Read for Alerts, Authored Write)
+    match /communityReports/{reportId} {
+      allow read: if true;
+      allow create: if isSignedIn() && isValidId(reportId) && isValidCommunityReport(incoming());
+      allow update: if false;
+      allow delete: if isSignedIn() && isValidId(reportId) && existing().userId == request.auth.uid;
+    }
+  }
+}

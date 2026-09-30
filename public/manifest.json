@@ -1,0 +1,21 @@
+{
+  "short_name": "KrishiSetu",
+  "name": "KrishiSetu - Agricultural Intelligence Network",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "/icon-512.png",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#fbfbfb",
+  "theme_color": "#15803d",
+  "display": "standalone",
+  "orientation": "portrait"
+}
