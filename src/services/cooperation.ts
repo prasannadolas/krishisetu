@@ -121,8 +121,9 @@ export async function fetchRegionalSignals(): Promise<{ signals: RegionalSignal[
         return { signals: data.signals, isCloud: Boolean(data.isCloud) };
       }
     }
-  } catch (e) {
-    console.warn("Could not reach cooperation API endpoint, using local store:", e);
+    // Non-ok responses (404 in dev) silently fall through to local fallback
+  } catch {
+    // Network error: use local store
   }
 
   // Fallback to localStorage + seeded benchmarks
@@ -169,8 +170,9 @@ export async function submitFieldReport(report: FieldReportSubmission): Promise<
       const data = await res.json();
       return { success: true, signal: data.signal || newSignal, isCloud: Boolean(data.isCloud) };
     }
-  } catch (err) {
-    console.warn("Server sync deferred to local mode:", err);
+    // Non-ok (404 in dev mode) - fall through to local mode
+  } catch {
+    // Network error: local mode only
   }
 
   return { success: true, signal: newSignal, isCloud: false };

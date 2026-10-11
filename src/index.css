@@ -1,1 +1,48 @@
 @import "tailwindcss";
+
+/* Hide scrollbar but allow scrolling */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Safe area padding for iOS notch/home indicator */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Smooth scroll behavior */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Prevent zoom on input focus on iOS */
+input, select, textarea {
+  font-size: max(16px, 1em);
+}
+
+/* Better tap highlight on mobile */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Custom scrollbar for desktop */
+@media (min-width: 1024px) {
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: #d6d3d1;
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: #a8a29e;
+  }
+}

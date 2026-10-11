@@ -432,11 +432,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.warn("Redirect auth result notice:", err);
     });
 
+    // Listen for guest login events from FarmerAuthModal
+    const handleGuestLoginEvent = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      const guestProfile = customEvent.detail;
+      if (guestProfile) {
+        setFarmerProfile(guestProfile);
+        setIsAuthReady(true);
+        // Clear any previous guest profile when a new one is set
+        localStorage.removeItem('krishisetu_guest_profile_cleared');
+      }
+    };
+    window.addEventListener('krishisetu-guest-login', handleGuestLoginEvent);
+
+    // Restore guest profile from localStorage if no Firebase user
+    try {
+      const savedGuest = localStorage.getItem('krishisetu_guest_profile');
+      if (savedGuest) {
+        const guestProfile = JSON.parse(savedGuest);
+        if (guestProfile?.uid?.startsWith('guest-')) {
+          setFarmerProfile(guestProfile);
+          setIsAuthReady(true);
+        }
+      }
+    } catch (e) {
+      console.warn('Could not restore guest profile:', e);
+    }
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       setCurrentUser(user);
       setIsAuthReady(true);
 
       if (user) {
+        // Clear guest profile when a real user signs in
+        try {
+          localStorage.removeItem('krishisetu_guest_profile');
+        } catch {}
+        
         try {
           let profile = await getFarmerProfile(user.uid);
           if (!profile) {
@@ -448,20 +480,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               district: selectedDistrict.name,
               createdAt: new Date().toISOString()
             };
-            await saveFarmerProfile(profile);
+            try {
+              await saveFarmerProfile(profile);
+            } catch (dbErr) {
+              console.warn("Could not save profile to Firestore (non-critical):", dbErr);
+            }
           }
           setFarmerProfile(profile);
-          await loadFarmerRecords(user.uid);
+          try {
+            await loadFarmerRecords(user.uid);
+          } catch (recordsErr) {
+            console.warn("Could not load records (non-critical):", recordsErr);
+          }
         } catch (e) {
           console.error("Error setting up user profile:", e);
+          // Still set a basic profile so the user isn't stuck
+          setFarmerProfile({
+            uid: user.uid,
+            name: user.displayName || 'Kisan Sahayak',
+            state: selectedState.name,
+            district: selectedDistrict.name,
+            createdAt: new Date().toISOString()
+          });
         }
       } else {
-        setFarmerProfile(null);
-        setFarmerRecords([]);
+        // Don't clear guest profile if one exists
+        const savedGuest = localStorage.getItem('krishisetu_guest_profile');
+        if (!savedGuest) {
+          setFarmerProfile(null);
+          setFarmerRecords([]);
+        }
       }
     });
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      window.removeEventListener('krishisetu-guest-login', handleGuestLoginEvent);
+    };
   }, [selectedState.name, selectedDistrict.name]);
 
   const loadFarmerRecords = async (uid: string) => {
@@ -553,11 +608,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const signOutFarmer = async () => {
     try {
+      // Clear guest profile from localStorage
+      try {
+        localStorage.removeItem('krishisetu_guest_profile');
+      } catch {}
+      
       await fbSignOut(auth);
       setFarmerProfile(null);
       setFarmerRecords([]);
     } catch (err) {
       console.error("Sign out error:", err);
+      // Even if Firebase sign-out fails, clear local state
+      setFarmerProfile(null);
+      setFarmerRecords([]);
     }
   };
 

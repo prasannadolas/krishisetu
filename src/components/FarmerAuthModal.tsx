@@ -12,7 +12,9 @@ import {
   MapPin, 
   Phone, 
   Sparkles,
-  CheckCircle2
+  CheckCircle2,
+  Eye,
+  Info
 } from 'lucide-react';
 import { 
   signInWithEmailAndPassword, 
@@ -60,11 +62,13 @@ export const FarmerAuthModal: React.FC = () => {
       console.error("Google Auth error:", err);
       let msg = err.message || 'Google sign-in could not be completed.';
       if (err.code === 'auth/popup-blocked') {
-        msg = 'Pop-up window was blocked by your browser. Redirecting or use Email / Demo sign in below.';
+        msg = 'Pop-up window was blocked by your browser. Please try "Continue as Guest" or "Instant Demo" below.';
       } else if (err.code === 'auth/popup-closed-by-user') {
-        msg = 'Sign-in window closed before completing. Click again to retry or use Instant Demo Sign In.';
+        msg = 'Sign-in window closed. Click again to retry, or use Guest / Demo mode below.';
       } else if (err.code === 'auth/unauthorized-domain' || err.code === 'auth/invalid-api-key') {
-        msg = 'Google Auth origin is not allowed in this environment domain. Please use Email Sign In or Instant Demo Sign In below.';
+        msg = 'Google Sign-In is not configured for this domain. To fix: go to Firebase Console → Authentication → Settings → Authorized Domains and add your hosting domain. Meanwhile, use "Continue as Guest" or "Instant Demo" below.';
+      } else if (err.code === 'auth/operation-not-allowed') {
+        msg = 'Google Sign-In provider is not enabled. To fix: go to Firebase Console → Authentication → Sign-in method → Enable Google. Meanwhile, use "Continue as Guest" or "Instant Demo" below.';
       }
       setError(msg);
     } finally {
@@ -126,6 +130,12 @@ export const FarmerAuthModal: React.FC = () => {
         userFriendly = 'Incorrect email or password. Please verify and try again.';
       } else if (err.code === 'auth/weak-password') {
         userFriendly = 'Password should be at least 6 characters.';
+      } else if (err.code === 'auth/operation-not-allowed') {
+        userFriendly = 'Email/Password sign-in is not enabled. To fix: go to Firebase Console → Authentication → Sign-in method → Enable Email/Password. Meanwhile, use "Continue as Guest" below.';
+      } else if (err.code === 'auth/configuration-not-found' || err.code === 'auth/project-not-found') {
+        userFriendly = 'Firebase Auth is not configured for this project. Use "Continue as Guest" to access the app.';
+      } else if (err.code === 'auth/network-request-failed') {
+        userFriendly = 'Network error. Check your internet connection and try again, or use "Continue as Guest".';
       }
       setError(userFriendly);
     } finally {
@@ -143,27 +153,69 @@ export const FarmerAuthModal: React.FC = () => {
       try {
         await signInWithEmailAndPassword(auth, demoEmail, demoPass);
       } catch {
-        const cred = await createUserWithEmailAndPassword(auth, demoEmail, demoPass);
-        await updateAuthProfile(cred.user, { displayName: 'Rameshwar Jadhav' });
-        await saveFarmerProfile({
-          uid: cred.user.uid,
-          name: 'Rameshwar Jadhav',
-          phone: '9822012345',
-          state: 'Maharashtra',
-          district: 'Pune',
-          village: 'Baramati',
-          farmSizeAcres: '4.5',
-          primaryCrops: 'Soybean, Wheat, Sugarcane, Cotton',
-          soilType: 'Medium Black Soil',
-          createdAt: new Date().toISOString()
-        });
+        try {
+          const cred = await createUserWithEmailAndPassword(auth, demoEmail, demoPass);
+          await updateAuthProfile(cred.user, { displayName: 'Rameshwar Jadhav' });
+          try {
+            await saveFarmerProfile({
+              uid: cred.user.uid,
+              name: 'Rameshwar Jadhav',
+              phone: '9822012345',
+              state: 'Maharashtra',
+              district: 'Pune',
+              village: 'Baramati',
+              farmSizeAcres: '4.5',
+              primaryCrops: 'Soybean, Wheat, Sugarcane, Cotton',
+              soilType: 'Medium Black Soil',
+              createdAt: new Date().toISOString()
+            });
+          } catch (dbErr) {
+            console.warn('Could not save demo profile to Firestore (non-critical):', dbErr);
+          }
+        } catch (createErr: any) {
+          // If Firebase auth itself is not working, fall back to guest mode with demo profile
+          console.warn('Firebase Auth not available, falling back to guest demo mode:', createErr);
+          handleGuestLogin('Rameshwar Jadhav (Demo)');
+          return;
+        }
       }
       setIsAuthModalOpen(false);
     } catch (err: any) {
-      setError(err.message || 'Demo farmer login failed');
+      console.error('Demo login error:', err);
+      // Final fallback: enter as guest with demo identity
+      handleGuestLogin('Rameshwar Jadhav (Demo)');
     } finally {
       setLoading(false);
     }
+  };
+
+  // Guest mode: no Firebase auth, uses localStorage for profile
+  const handleGuestLogin = (guestName?: string) => {
+    setError(null);
+    const name = guestName || 'Kisan Guest';
+    const guestProfile: FarmerProfile = {
+      uid: `guest-${Date.now()}`,
+      name,
+      state: selectedState.name,
+      district: selectedDistrict.name,
+      village: '',
+      farmSizeAcres: '',
+      primaryCrops: '',
+      soilType: 'Medium Black Soil',
+      createdAt: new Date().toISOString()
+    };
+    // Store guest profile in localStorage so it persists across page reloads
+    try {
+      localStorage.setItem('krishisetu_guest_profile', JSON.stringify(guestProfile));
+    } catch (e) {
+      console.warn('Could not save guest profile to localStorage:', e);
+    }
+    // Dispatch a custom event so AppContext can pick up the guest profile
+    window.dispatchEvent(new CustomEvent('krishisetu-guest-login', { detail: guestProfile }));
+    setSuccessMsg(`Welcome, ${name}! You are using Guest Mode.`);
+    setTimeout(() => {
+      setIsAuthModalOpen(false);
+    }, 800);
   };
 
   return (
@@ -234,11 +286,33 @@ export const FarmerAuthModal: React.FC = () => {
             </div>
           )}
 
-          {/* Google Sign-In (Recommended) */}
+          {/* Guest Mode - Primary CTA for quick access */}
+          <button
+            onClick={() => handleGuestLogin()}
+            disabled={loading}
+            className="w-full py-3.5 px-4 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-bold text-sm shadow-lg transition flex items-center justify-center gap-3 active:scale-[0.98]"
+          >
+            <Eye className="w-5 h-5" />
+            <span>Continue as Guest (No Login Required)</span>
+          </button>
+
+          <div className="p-2.5 bg-blue-50 border border-blue-200 rounded-xl text-[11px] text-blue-800 flex items-start gap-2">
+            <Info className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
+            <span>Guest mode gives you full access to weather, soil, crop AI, and market data. Sign in with Google or Email for cloud-synced records.</span>
+          </div>
+
+          <div className="relative flex items-center justify-center">
+            <hr className="w-full border-stone-200" />
+            <span className="absolute bg-white px-3 text-[11px] font-semibold text-stone-400 uppercase tracking-wider">
+              Or Sign In for Cloud Sync
+            </span>
+          </div>
+
+          {/* Google Sign-In */}
           <button
             onClick={handleGoogleLogin}
             disabled={loading}
-            className="w-full py-3.5 px-4 rounded-2xl bg-white hover:bg-stone-50 border border-stone-300 text-stone-800 font-bold text-sm shadow-xs transition flex items-center justify-center gap-3 active:scale-98"
+            className="w-full py-3 px-4 rounded-2xl bg-white hover:bg-stone-50 border border-stone-300 text-stone-800 font-bold text-sm shadow-xs transition flex items-center justify-center gap-3 active:scale-[0.98]"
           >
             <svg className="w-5 h-5" viewBox="0 0 24 24">
               <path
@@ -264,7 +338,7 @@ export const FarmerAuthModal: React.FC = () => {
           <div className="relative flex items-center justify-center">
             <hr className="w-full border-stone-200" />
             <span className="absolute bg-white px-3 text-[11px] font-semibold text-stone-400 uppercase tracking-wider">
-              Or with Farmer ID
+              Or with Email
             </span>
           </div>
 

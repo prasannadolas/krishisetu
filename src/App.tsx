@@ -80,7 +80,7 @@ const AppContent: React.FC = () => {
         <DesktopSidebar />
 
         {/* Main Content Area */}
-        <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8 max-w-5xl mx-auto w-full pb-28 lg:pb-12">
+        <main className="flex-1 min-w-0 p-3 sm:p-6 lg:p-8 max-w-5xl mx-auto w-full pb-32 lg:pb-12">
           {renderCurrentPage()}
         </main>
       </div>
@@ -89,11 +89,11 @@ const AppContent: React.FC = () => {
       {!isAssistantOpen && (
         <button
           onClick={() => setIsAssistantOpen(true)}
-          className="fixed bottom-20 lg:bottom-6 right-5 z-40 px-4 py-3 rounded-full bg-gradient-to-tr from-emerald-700 to-emerald-500 hover:from-emerald-800 hover:to-emerald-600 text-white shadow-xl hover:scale-105 active:scale-95 transition flex items-center gap-2 ring-4 ring-emerald-500/20"
+          className="fixed bottom-24 lg:bottom-6 right-4 z-40 px-3.5 py-2.5 rounded-full bg-gradient-to-tr from-emerald-700 to-emerald-500 hover:from-emerald-800 hover:to-emerald-600 text-white shadow-xl hover:scale-105 active:scale-95 transition flex items-center gap-2 ring-4 ring-emerald-500/20"
           title={t('kisanMitra')}
         >
-          <Bot className="w-5 h-5" />
-          <span className="font-bold text-xs">{t('kisanMitra')}</span>
+          <Bot className="w-4 h-4" />
+          <span className="font-bold text-xs hidden sm:inline">{t('kisanMitra')}</span>
         </button>
       )}
 

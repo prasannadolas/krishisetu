@@ -35,8 +35,9 @@ export async function fetchClimateTrends(lat: number, lon: number): Promise<Clim
         return data;
       }
     }
-  } catch (err) {
-    console.warn("Backend climate archive proxy failed, computing locally:", err);
+    // Non-ok responses (404 in dev) silently fall through to local computation
+  } catch {
+    // Network error: use local computation
   }
 
   // Fallback to local high-precision 30-year agro-climate series calibrated to latitude
