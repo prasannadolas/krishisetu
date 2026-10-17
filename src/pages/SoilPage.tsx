@@ -99,9 +99,21 @@ export const SoilPage: React.FC = () => {
     setIsSaved(true);
   };
 
-  const handleSampleImage = () => {
-    const sampleSvg = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"><rect width="400" height="300" fill="%2345322E"/><circle cx="120" cy="150" r="80" fill="%233E2723" opacity="0.6"/><circle cx="280" cy="180" r="90" fill="%232E1C14" opacity="0.5"/><circle cx="200" cy="90" r="60" fill="%234A3525" opacity="0.4"/><text x="50%" y="50%" dominant-baseline="middle" text-anchor="middle" fill="%23D7CCC8" font-family="sans-serif" font-size="16">Black Cotton Soil Sample</text></svg>`;
-    setImagePreview(sampleSvg);
+  const handleSampleImage = async () => {
+    try {
+      const response = await fetch('/samples/real_black_soil.jpg');
+      const blob = await response.blob();
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setImagePreview(e.target?.result as string);
+        setError(null);
+        setIsSaved(false);
+      };
+      reader.readAsDataURL(blob);
+    } catch {
+      // Fallback
+      setImagePreview('/samples/real_black_soil.jpg');
+    }
   };
 
   return (

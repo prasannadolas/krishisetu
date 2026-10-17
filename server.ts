@@ -835,6 +835,137 @@ app.get('/api/market/prices', async (req: Request, res: Response) => {
 });
 
 // ==========================================
+// 6B. Real-World Historical Climate Archive API (Open-Meteo Reanalysis)
+// ==========================================
+const climateCache = new Map<string, { timestamp: number; data: any }>();
+
+app.get('/api/climate/archive', async (req: Request, res: Response) => {
+  try {
+    const lat = parseFloat((req.query.lat as string) || '19.75');
+    const lon = parseFloat((req.query.lon as string) || '75.71');
+    const cacheKey = `${lat.toFixed(2)}_${lon.toFixed(2)}`;
+
+    // Return cached data if under 1 hour old
+    const cached = climateCache.get(cacheKey);
+    if (cached && Date.now() - cached.timestamp < 3600 * 1000) {
+      return res.json(cached.data);
+    }
+
+    const startYear = 1995;
+    const endYear = 2024;
+    const openMeteoUrl = `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=${startYear}-01-01&end_date=${endYear}-12-31&daily=temperature_2m_mean,precipitation_sum&timezone=Asia%2FKolkata`;
+
+    const fetchRes = await fetch(openMeteoUrl);
+    if (!fetchRes.ok) {
+      return res.status(502).json({ error: 'Open-Meteo archive call unsuccessful' });
+    }
+
+    const rawData = await fetchRes.json();
+    if (!rawData.daily || !rawData.daily.time) {
+      return res.status(500).json({ error: 'Missing daily series in archive payload' });
+    }
+
+    // Aggregate daily series into real annual records
+    const yearBuckets: Record<number, { temps: number[]; totalRain: number }> = {};
+    for (let y = startYear; y <= endYear; y++) {
+      yearBuckets[y] = { temps: [], totalRain: 0 };
+    }
+
+    const times: string[] = rawData.daily.time;
+    const temps: (number | null)[] = rawData.daily.temperature_2m_mean;
+    const rains: (number | null)[] = rawData.daily.precipitation_sum;
+
+    for (let i = 0; i < times.length; i++) {
+      const year = parseInt(times[i].substring(0, 4));
+      if (yearBuckets[year]) {
+        if (temps[i] !== null && temps[i] !== undefined) {
+          yearBuckets[year].temps.push(temps[i] as number);
+        }
+        if (rains[i] !== null && rains[i] !== undefined) {
+          yearBuckets[year].totalRain += rains[i] as number;
+        }
+      }
+    }
+
+    const yearlyData: Array<{ year: number; avgTemperature: number; totalRainfall: number; tempTrend?: number; rainTrend?: number }> = [];
+    for (let y = startYear; y <= endYear; y++) {
+      const b = yearBuckets[y];
+      const avgTemp = b.temps.length > 0 
+        ? Number((b.temps.reduce((a, v) => a + v, 0) / b.temps.length).toFixed(2))
+        : 26.0;
+      yearlyData.push({
+        year: y,
+        avgTemperature: avgTemp,
+        totalRainfall: Math.round(b.totalRain)
+      });
+    }
+
+    // Linear regression for temperature & precipitation
+    const n = yearlyData.length;
+    let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+    let sumRain = 0, sumXRain = 0;
+
+    yearlyData.forEach((d, i) => {
+      sumX += i;
+      sumY += d.avgTemperature;
+      sumXY += i * d.avgTemperature;
+      sumXX += i * i;
+      sumRain += d.totalRainfall;
+      sumXRain += i * d.totalRainfall;
+    });
+
+    const slopeTemp = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+    const interceptTemp = (sumY - slopeTemp * sumX) / n;
+    const slopeRain = (n * sumXRain - sumX * sumRain) / (n * sumXX - sumX * sumX);
+    const interceptRain = (sumRain - slopeRain * sumX) / n;
+
+    yearlyData.forEach((d, i) => {
+      d.tempTrend = Number((interceptTemp + slopeTemp * i).toFixed(2));
+      d.rainTrend = Math.round(interceptRain + slopeRain * i);
+    });
+
+    const tempChange = Number((slopeTemp * (n - 1)).toFixed(2));
+    const rainStart = interceptRain;
+    const rainEnd = interceptRain + slopeRain * (n - 1);
+    const rainChangePercent = Number((((rainEnd - rainStart) / rainStart) * 100).toFixed(1));
+
+    let hottest = yearlyData[0];
+    let coolest = yearlyData[0];
+    let wettest = yearlyData[0];
+    let driest = yearlyData[0];
+
+    yearlyData.forEach(d => {
+      if (d.avgTemperature > hottest.avgTemperature) hottest = d;
+      if (d.avgTemperature < coolest.avgTemperature) coolest = d;
+      if (d.totalRainfall > wettest.totalRainfall) wettest = d;
+      if (d.totalRainfall < driest.totalRainfall) driest = d;
+    });
+
+    const result = {
+      yearlyData,
+      insight: {
+        yearsAnalyzed: n,
+        tempChangeDegC: tempChange,
+        rainChangePercent,
+        driestYear: { year: driest.year, rain: driest.totalRainfall },
+        wettestYear: { year: wettest.year, rain: wettest.totalRainfall },
+        hottestYear: { year: hottest.year, temp: hottest.avgTemperature },
+        coolestYear: { year: coolest.year, temp: coolest.avgTemperature },
+        monsoonVariabilityIndex: `Empirical 30-year variance (${rainChangePercent >= 0 ? '+' : ''}${rainChangePercent}% trend)`,
+        calculatedSummary: `According to 30-year Open-Meteo reanalysis records (${startYear}–${endYear}), localized mean temperature shifted by ${tempChange > 0 ? '+' : ''}${tempChange}°C with an overall precipitation shift of ${rainChangePercent > 0 ? '+' : ''}${rainChangePercent}%.`
+      },
+      source: 'Open-Meteo Archive API (1995-2024)'
+    };
+
+    climateCache.set(cacheKey, { timestamp: Date.now(), data: result });
+    return res.json(result);
+  } catch (err: any) {
+    console.error('Climate archive processing error:', err);
+    return res.status(500).json({ error: 'Climate archive processing failed' });
+  }
+});
+
+// ==========================================
 // 7. Cooperation Hub & Open Data Standard
 // ==========================================
 app.get('/api/cooperation/signals', (_req: Request, res: Response) => {
@@ -867,64 +998,110 @@ app.get('/advisory', async (req: Request, res: Response) => {
   const latitude = parseFloat(lat);
   const longitude = parseFloat(lon);
 
+  // Fetch real-time weather from Open-Meteo for the requested coordinate
+  let tempC = 28.5;
+  let humidityPct = 65;
+  let rain24h = 0.0;
+  let rainRisk = "Low to Moderate";
+
+  try {
+    const wmRes = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current=temperature_2m,relative_humidity_2m,precipitation&timezone=Asia%2FKolkata`);
+    if (wmRes.ok) {
+      const wmJson = await wmRes.json();
+      tempC = wmJson.current?.temperature_2m ?? tempC;
+      humidityPct = wmJson.current?.relative_humidity_2m ?? humidityPct;
+      rain24h = wmJson.current?.precipitation ?? rain24h;
+      if (rain24h > 20 || humidityPct > 80) rainRisk = "High (Waterlogging & Fungal Risk)";
+      else if (rain24h > 5) rainRisk = "Moderate";
+      else rainRisk = "Low";
+    }
+  } catch (err) {
+    console.warn("Weather query in /advisory fallback:", err);
+  }
+
+  // Determine agro-climatic zone based on latitude & longitude
+  let zoneName = "Western Maharashtra Scarcity Zone (Zone 6)";
+  let stateName = "Maharashtra";
+  let soilType = "Medium Black (Vertisol)";
+  let texture = "Clayey Loam";
+
+  if (latitude > 28) {
+    zoneName = "Trans-Gangetic Plains Region";
+    stateName = "Punjab / Haryana";
+    soilType = "Alluvial Loam";
+    texture = "Sandy Clay Loam";
+  } else if (latitude > 24) {
+    zoneName = "Middle Gangetic Plain Zone";
+    stateName = "Uttar Pradesh / Bihar";
+    soilType = "Deep Alluvial Loam";
+    texture = "Silty Clay";
+  } else if (latitude < 16) {
+    zoneName = "Southern Plateau and Hills Zone";
+    stateName = "Karnataka / Tamil Nadu";
+    soilType = "Red Sandy Loam / Lateritic";
+    texture = "Coarse Loamy Sand";
+  } else if (longitude > 80) {
+    zoneName = "Eastern Plateau and Hills Zone";
+    stateName = "Eastern Belt";
+    soilType = "Red and Yellow Soils";
+    texture = "Loamy Clay";
+  }
+
   const payload = {
     standardVersion: "1.0.0",
     specificationUrl: "https://krishisetu.gov.in/spec/kiaas-v1.json",
     region: {
-      state: "Maharashtra",
-      district: "Pune",
+      state: stateName,
       latitude,
       longitude,
-      agroClimaticZone: "Western Maharashtra Scarcity Zone (Zone 6)"
+      agroClimaticZone: zoneName
     },
     timestamp: new Date().toISOString(),
     soil: {
-      type: "Medium Black (Vertisol)",
-      texture: "Clayey Loam",
-      moistureIndex: 0.28,
+      type: soilType,
+      texture,
+      moistureIndex: humidityPct > 70 ? 0.32 : 0.24,
       organicMatter: "Medium",
-      nitrogen_kg_ha: 210,
-      phosphorus_kg_ha: 18,
-      potassium_kg_ha: 340,
-      ph: 7.4
+      laboratoryValidationNote: "Physical parameters estimated. Formal NPK requires Soil Health Card soil testing."
     },
     weather: {
-      temperature_c: 28.5,
-      humidity_percent: 65,
-      rainfall_24h_mm: 0.0,
-      forecastRainRisk: "Moderate"
+      temperature_c: tempC,
+      humidity_percent: humidityPct,
+      rainfall_24h_mm: rain24h,
+      forecastRainRisk: rainRisk,
+      source: "Open-Meteo Live Agrometeorological Gateway"
     },
     crop: {
-      season: "Kharif",
-      recommendedCrops: [
+      season: "Kharif / Rabi Transition",
+      recommendedCultivars: [
         {
-          name: "Soybean (JS-335)",
-          suitabilityScore: 94,
-          durationDays: 95,
-          regenerativePractice: "Intercropping with Pigeon Pea (Tur) 4:2 ratio"
+          name: "Terminal Heat Resilient Cultivar",
+          suitabilityScore: 92,
+          regenerativePractice: "Surface crop residue retention and broad-bed furrowing"
         },
         {
-          name: "Pearl Millet (Bajra)",
-          suitabilityScore: 88,
-          durationDays: 80,
-          regenerativePractice: "Green manuring with Crotalaria juncea"
+          name: "Pulse Intercrop (Chickpea / Pigeon Pea)",
+          suitabilityScore: 89,
+          regenerativePractice: "Biofertilizer seed inoculation with Rhizobium"
         }
       ]
     },
     risk: {
-      overallRiskLevel: "Moderate",
+      overallRiskLevel: rainRisk.includes("High") ? "High" : "Moderate",
       diseaseAlerts: [
-        "Yellow Mosaic Virus vector (Whitefly) monitoring recommended in early vegetative stage."
+        humidityPct > 75 
+          ? "High ambient humidity (>75%): Inspect crop canopy for foliar fungal and bacterial spore manifestation."
+          : "Maintain routine field scouting for sap-sucking vector insects."
       ]
     },
     advisory: {
-      primaryAdvice: "Soil moisture status is currently adequate for early kharif tillering. Postpone synthetic urea broadcast before anticipated rain showers.",
+      primaryAdvice: `Localized telemetry for ${zoneName} indicates ${tempC}°C and ${humidityPct}% relative humidity. Ensure soil moisture monitoring and avoid unnecessary pesticide spraying during extreme heat or rain.`,
       language: lang,
-      irrigationDirective: "Light furrow irrigation in evening if dry spell extends beyond 5 days.",
-      fertilizerDirective: "Split application of nitrogen; blend with neem cake for slow release."
+      irrigationDirective: humidityPct > 75 ? "Postpone surface flood irrigation; maintain open drain bunds." : "Apply supplemental evening drip/furrow irrigation.",
+      fertilizerDirective: "Adopt split nitrogen top-dressing blended with neem cake for slow release."
     },
     interoperabilitySignature: {
-      node: "KRISHISETU-FEDERATED-GATEWAY-IN-WEST",
+      node: "KRISHISETU-FEDERATED-GATEWAY-NATIONAL",
       standardCompliance: "KIAAS-v1-CERTIFIED"
     }
   };

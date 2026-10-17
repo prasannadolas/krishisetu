@@ -23,69 +23,69 @@ export interface CropMarketInfo {
 export const COMMODITY_BENCHMARKS: Record<string, { category: CropMarketInfo['category']; basePrice: number; msp: number; hint: string }> = {
   "Paddy (Dhan)": {
     category: "Cereal",
-    basePrice: 2300,
-    msp: 2320,
-    hint: "Government procurement active at MSP. Hold dry grain in moisture-proof bags for 3 weeks post-harvest peak to capture a 6-9% price rebound."
+    basePrice: 2320,
+    msp: 2300, // CCEA MSP for KMS 2024-25 (Common: ₹2300, Grade A: ₹2320)
+    hint: "Government procurement active at MSP (₹2,300/q). Hold moisture-certified grain (under 17%) in warehouse receipts (e-NWR) to capture a 6-8% post-procurement price rebound."
   },
   "Wheat (Gehun)": {
     category: "Cereal",
-    basePrice: 2425,
-    msp: 2425,
-    hint: "Buffer stock demand strong. Best selling window is 4-6 weeks after initial harvest rush when local flour mill orders rise."
+    basePrice: 2475,
+    msp: 2425, // CCEA MSP for RMS 2024-25 (₹2425/q)
+    hint: "Open Market Sale Scheme (OMSS) and flour miller demand steady. Optimal selling window is 3-5 weeks post-peak harvest arrivals."
   },
   "Cotton (Kapas)": {
     category: "Cash Crop",
-    basePrice: 7120,
-    msp: 7521,
-    hint: "CCI procurement centers offering MSP. Stagger sales in 2 tranches: 50% early to cover input loans, 50% in mid-season."
+    basePrice: 7280,
+    msp: 7121, // CCEA MSP for Medium Staple (₹7121), Long Staple (₹7521)
+    hint: "Cotton Corporation of India (CCI) procurement centers active. Sell 50% early to clear operational input costs and retain 50% for December-January export parity."
   },
   "Soybean": {
     category: "Oilseed",
-    basePrice: 4750,
-    msp: 4892,
-    hint: "Global edible oil import duties favor domestic processing. Avoid panic selling during first week of October arrivals."
+    basePrice: 4720,
+    msp: 4892, // CCEA MSP KMS 2024-25 (₹4892/q)
+    hint: "Domestic crush demand strong. If local spot rates dip under MSP of ₹4,892, enroll for Bhavantar / NAFED PSS price deficiency procurement."
   },
   "Chickpea (Chana / Gram)": {
     category: "Pulse",
-    basePrice: 5850,
-    msp: 5650,
-    hint: "Market trading well above MSP due to festive pulse consumption. High holding capacity yields premium returns in off-season."
+    basePrice: 5950,
+    msp: 5650, // CCEA MSP RMS 2024-25 (₹5650/q)
+    hint: "Spot mandi rates trading comfortably above MSP of ₹5,650 due to tight ending stocks. Gradual staggered dispatch over 60 days maximizes realized margins."
   },
   "Mustard (Sarson)": {
     category: "Oilseed",
-    basePrice: 5550,
-    msp: 5950,
-    hint: "Government NAFED/HAFED procurement is recommended since open market spot rates are currently fluctuating near MSP."
+    basePrice: 5650,
+    msp: 5950, // CCEA MSP RMS 2024-25 (₹5950/q)
+    hint: "NAFED & HAFED support procurement recommended whenever local open mandi bids lag behind official MSP of ₹5,950/q."
   },
   "Maize (Makka)": {
     category: "Cereal",
-    basePrice: 2180,
-    msp: 2225,
-    hint: "Ethanol blending and poultry feed demand keeping prices stable. Ensure grain moisture is below 14% to prevent moisture deductions."
+    basePrice: 2260,
+    msp: 2225, // CCEA MSP KMS 2024-25 (₹2225/q)
+    hint: "Ethanol distilleries and feed mills driving consistent floor demand. Keep grain moisture below 14% to prevent moisture cut deductions."
   },
   "Pearl Millet (Bajra)": {
     category: "Millet",
-    basePrice: 2550,
-    msp: 2625,
-    hint: "Increasing urban health consumer demand and state millets procurement missions ensure steady floor prices."
+    basePrice: 2680,
+    msp: 2625, // CCEA MSP KMS 2024-25 (₹2625/q)
+    hint: "State Shree Anna millet mission procurement active. Highest returns achieved through direct aggregation via Farmer Producer Organizations (FPOs)."
   },
   "Pigeon Pea (Tur / Arhar)": {
     category: "Pulse",
-    basePrice: 9400,
-    msp: 7550,
-    hint: "High market deficit keeps spot prices ~20% above MSP. Gradual staggered sales recommended."
+    basePrice: 9650,
+    msp: 7550, // CCEA MSP KMS 2024-25 (₹7550/q)
+    hint: "Structural supply deficit keeping spot rates substantially above MSP. Stagger delivery across monthly intervals."
   },
   "Onion": {
     category: "Vegetable",
-    basePrice: 2200,
+    basePrice: 2450,
     msp: 0,
-    hint: "High volatility. Sell in well-aerated batches. Do not store without temperature & fungal cure protection."
+    hint: "High perishability and weather-linked price volatility. Grade bulbs by size and ensure aeration to avoid fungal rot in transit."
   },
   "Tomato": {
     category: "Vegetable",
-    basePrice: 1800,
+    basePrice: 1950,
     msp: 0,
-    hint: "Perishable crop. Immediate farm-gate aggregation via FPO (Farmer Producer Org) to avoid mandi commission cuts."
+    hint: "Short shelf life. Aggregate at farm-gate via local FPO or direct-to-retail channels to avoid 8-12% commission agent cuts in central APMCs."
   }
 };
 

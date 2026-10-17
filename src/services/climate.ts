@@ -27,7 +27,7 @@ export interface ClimateTrendResult {
 
 export async function fetchClimateTrends(lat: number, lon: number): Promise<ClimateTrendResult> {
   try {
-    // Try our backend proxy first to avoid client CORS or payload bloat
+    // Try our backend proxy first
     const res = await fetch(`/api/climate/archive?lat=${lat}&lon=${lon}`);
     if (res.ok) {
       const data = await res.json();
@@ -35,12 +35,90 @@ export async function fetchClimateTrends(lat: number, lon: number): Promise<Clim
         return data;
       }
     }
-    // Non-ok responses (404 in dev) silently fall through to local computation
   } catch {
-    // Network error: use local computation
+    // Fall through to client direct fetch
   }
 
-  // Fallback to local high-precision 30-year agro-climate series calibrated to latitude
+  // Direct client Open-Meteo archive call as high-fidelity real data fallback
+  try {
+    const startYear = 1995;
+    const endYear = 2024;
+    const omUrl = `https://archive-api.open-meteo.com/v1/archive?latitude=${lat}&longitude=${lon}&start_date=${startYear}-01-01&end_date=${endYear}-12-31&daily=temperature_2m_mean,precipitation_sum&timezone=Asia%2FKolkata`;
+    const omRes = await fetch(omUrl);
+    if (omRes.ok) {
+      const rawData = await omRes.json();
+      if (rawData.daily?.time) {
+        const yearBuckets: Record<number, { temps: number[]; totalRain: number }> = {};
+        for (let y = startYear; y <= endYear; y++) yearBuckets[y] = { temps: [], totalRain: 0 };
+        const times: string[] = rawData.daily.time;
+        const temps: number[] = rawData.daily.temperature_2m_mean;
+        const rains: number[] = rawData.daily.precipitation_sum;
+        for (let i = 0; i < times.length; i++) {
+          const yr = parseInt(times[i].substring(0, 4));
+          if (yearBuckets[yr]) {
+            if (temps[i] !== null && temps[i] !== undefined) yearBuckets[yr].temps.push(temps[i]);
+            if (rains[i] !== null && rains[i] !== undefined) yearBuckets[yr].totalRain += rains[i];
+          }
+        }
+        const yearlyData: YearlyClimateData[] = [];
+        for (let y = startYear; y <= endYear; y++) {
+          const b = yearBuckets[y];
+          const avgTemp = b.temps.length > 0
+            ? Number((b.temps.reduce((acc, v) => acc + v, 0) / b.temps.length).toFixed(2))
+            : 26.0;
+          yearlyData.push({ year: y, avgTemperature: avgTemp, totalRainfall: Math.round(b.totalRain) });
+        }
+        const n = yearlyData.length;
+        let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0, sumRain = 0, sumXRain = 0;
+        yearlyData.forEach((d, i) => {
+          sumX += i;
+          sumY += d.avgTemperature;
+          sumXY += i * d.avgTemperature;
+          sumXX += i * i;
+          sumRain += d.totalRainfall;
+          sumXRain += i * d.totalRainfall;
+        });
+        const slopeTemp = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+        const interceptTemp = (sumY - slopeTemp * sumX) / n;
+        const slopeRain = (n * sumXRain - sumX * sumRain) / (n * sumXX - sumX * sumX);
+        const interceptRain = (sumRain - slopeRain * sumX) / n;
+        yearlyData.forEach((d, i) => {
+          d.tempTrend = Number((interceptTemp + slopeTemp * i).toFixed(2));
+          d.rainTrend = Math.round(interceptRain + slopeRain * i);
+        });
+        const tempChange = Number((slopeTemp * (n - 1)).toFixed(2));
+        const rainStart = interceptRain;
+        const rainEnd = interceptRain + slopeRain * (n - 1);
+        const rainChangePercent = Number((((rainEnd - rainStart) / rainStart) * 100).toFixed(1));
+        let hottest = yearlyData[0], coolest = yearlyData[0], wettest = yearlyData[0], driest = yearlyData[0];
+        yearlyData.forEach(d => {
+          if (d.avgTemperature > hottest.avgTemperature) hottest = d;
+          if (d.avgTemperature < coolest.avgTemperature) coolest = d;
+          if (d.totalRainfall > wettest.totalRainfall) wettest = d;
+          if (d.totalRainfall < driest.totalRainfall) driest = d;
+        });
+        return {
+          yearlyData,
+          insight: {
+            yearsAnalyzed: n,
+            tempChangeDegC: tempChange,
+            rainChangePercent,
+            driestYear: { year: driest.year, rain: driest.totalRainfall },
+            wettestYear: { year: wettest.year, rain: wettest.totalRainfall },
+            hottestYear: { year: hottest.year, temp: hottest.avgTemperature },
+            coolestYear: { year: coolest.year, temp: coolest.avgTemperature },
+            monsoonVariabilityIndex: `Empirical 30-year variance (${rainChangePercent >= 0 ? '+' : ''}${rainChangePercent}% trend)`,
+            calculatedSummary: `According to 30-year Open-Meteo reanalysis records (${startYear}–${endYear}), localized mean temperature shifted by ${tempChange > 0 ? '+' : ''}${tempChange}°C with an overall precipitation shift of ${rainChangePercent > 0 ? '+' : ''}${rainChangePercent}%.`
+          },
+          source: 'Open-Meteo Archive API (1995-2024)'
+        };
+      }
+    }
+  } catch (err) {
+    console.warn("Direct Open-Meteo archive call fallback:", err);
+  }
+
+  // Fallback to local calibrated archive benchmark if both offline
   return computeRegionalClimateArchive(lat, lon);
 }
 

@@ -122,10 +122,22 @@ export const DiseasePage: React.FC = () => {
     }
   };
 
-  const handleSampleImage = () => {
-    const sampleLeaf = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="300" viewBox="0 0 400 300"><rect width="400" height="300" fill="%232E7D32"/><path d="M200 40 C120 100 80 200 200 280 C320 200 280 100 200 40 Z" fill="%234CAF50"/><circle cx="170" cy="140" r="14" fill="%238D6E63" stroke="%23FDD835" stroke-width="3"/><circle cx="230" cy="180" r="18" fill="%236D4C41" stroke="%23FDD835" stroke-width="4"/><circle cx="190" cy="220" r="10" fill="%238D6E63"/><text x="50%" y="90%" dominant-baseline="middle" text-anchor="middle" fill="%23FFFFFF" font-family="sans-serif" font-size="14">Leaf Spot / Blight Foliage Sample</text></svg>`;
-    setImagePreview(sampleLeaf);
-    setCropHint('Soybean / Cotton');
+  const handleSampleImage = async () => {
+    try {
+      const response = await fetch('/samples/real_crop_foliage.jpg');
+      const blob = await response.blob();
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setImagePreview(e.target?.result as string);
+        setError(null);
+        setBroadcasted(false);
+        setIsSaved(false);
+      };
+      reader.readAsDataURL(blob);
+    } catch {
+      setImagePreview('/samples/real_crop_foliage.jpg');
+    }
+    setCropHint('Soybean / Cotton Foliage');
     setBroadcasted(false);
   };
 
